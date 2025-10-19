@@ -1,23 +1,53 @@
 import json
 import asyncio
+import sys
 from pathlib import Path
 import os
+import traceback
+
+# Fix Windows encoding FIRST
+if sys.platform == 'win32':
+    import msvcrt
+    # Set stdin and stdout to binary mode to prevent Windows encoding errors
+    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+
 from mcp.server.models import InitializationOptions
-from mcp.server import NotificationOptions, Server
+from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp import types
 
+# Enable debug logging to stderr (appears in MCP logs)
+def log_error(msg):
+    # Ensure all debug messages are flushed immediately
+    print(f"[BALATRO] {msg}", file=sys.stderr, flush=True)
+
+
+log_error("Starting Balatro MCP Server...")
+
 # Path to the JSON file
-APPDATA = os.getenv('APPDATA')
-JSON_PATH = Path(APPDATA) / "Balatro" / "mcp-bridge" / "mcp_gamestate.json"
+try:
+    APPDATA = os.getenv('APPDATA')
+    if not APPDATA:
+        log_error("ERROR: APPDATA environment variable not found!")
+        sys.exit(1)
+
+    # Note: Use Path objects for reliable cross-platform path joining
+    JSON_PATH = Path(APPDATA) / "Balatro" / "mcp-bridge" / "mcp_gamestate.json"
+    log_error(f"JSON path set to: {JSON_PATH}")
+except Exception as e:
+    log_error(f"ERROR setting up paths: {e}")
+    sys.exit(1)
 
 # Create the MCP server
 server = Server("balatro-agent")
-print("MCP server created")
+log_error("Server object created")
+
 
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
     """List available tools."""
+    log_error("list_tools called")
     return [
         types.Tool(
             name="read_game_state",
@@ -45,15 +75,17 @@ async def handle_call_tool(
         name: str, arguments: dict | None
 ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     """Handle tool execution."""
+    log_error(f"call_tool invoked: {name}")
 
-    if name == "read_game_state":
-        try:
+    try:
+        if name == "read_game_state":
             if not JSON_PATH.exists():
                 return [types.TextContent(
                     type="text",
                     text="Error: Game state file not found. Make sure Balatro is running and you've pressed F1 to export the game state."
                 )]
 
+            # Using 'r' with encoding='utf-8' is correct for reading the file content
             with open(JSON_PATH, 'r', encoding='utf-8') as f:
                 game_state = json.load(f)
 
@@ -108,16 +140,10 @@ async def handle_call_tool(
             output += "\n=== Raw Game State JSON ===\n"
             output += json.dumps(game_state, indent=2)
 
+            log_error("read_game_state completed successfully")
             return [types.TextContent(type="text", text=output)]
 
-        except Exception as e:
-            return [types.TextContent(
-                type="text",
-                text=f"Error reading game state: {str(e)}"
-            )]
-
-    elif name == "get_hand_analysis":
-        try:
+        elif name == "get_hand_analysis":
             if not JSON_PATH.exists():
                 return [types.TextContent(
                     type="text",
@@ -172,34 +198,48 @@ async def handle_call_tool(
             output += f"Suits: {dict(suits)}\n"
             output += f"Ranks: {dict(ranks)}\n"
 
+            log_error("get_hand_analysis completed successfully")
             return [types.TextContent(type="text", text=output)]
 
-        except Exception as e:
-            return [types.TextContent(
-                type="text",
-                text=f"Error analyzing hand: {str(e)}"
-            )]
+        else:
+            raise ValueError(f"Unknown tool: {name}")
 
-    else:
-        raise ValueError(f"Unknown tool: {name}")
-
+    except Exception as e:
+        log_error(f"ERROR in tool execution: {e}")
+        return [types.TextContent(
+            type="text",
+            text=f"Error: {str(e)}"
+        )]
 
 async def main():
     """Run the MCP server."""
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            InitializationOptions(
-                server_name="balatro-agent",
-                server_version="0.1.0",
-                capabilities=server.get_capabilities(
-                    notification_options=NotificationOptions(),
-                    experimental_capabilities={},
+    log_error("Entering main()")
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            log_error("stdio_server context entered")
+            await server.run(
+                read_stream,
+                write_stream,
+                InitializationOptions(
+                    server_name="balatro-agent",
+                    server_version="0.1.0",
+                    # FIX: 'capabilities' is required by the pydantic model
+                    capabilities={},
                 ),
-            ),
-        )
-
+            )
+            log_error("Server run completed")
+    except Exception as e:
+        log_error(f"FATAL ERROR in main: {e}")
+        import traceback
+        log_error(traceback.format_exc())
+        raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    log_error("Script starting...")
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log_error("Server stopped by user")
+    except Exception as e:
+        log_error(f"FATAL: {e}")
+        sys.exit(1)
