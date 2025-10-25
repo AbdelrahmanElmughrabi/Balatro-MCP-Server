@@ -243,7 +243,7 @@ Edit `main.lua` to export additional game state:
 - Vouchers
 - Deck modifications
 
-## Future Enhancements
+## Future Enhancements (might)
 
 - [ ] **Scoring simulation**: Calculate exact chip values for different plays
 - [ ] **Move recommendations**: Suggest optimal discards and plays based on jokers
@@ -275,10 +275,6 @@ The Python server includes critical Windows encoding fixes:
 - Unbuffered output with `-u` flag
 
 Without these, the MCP server crashes with `UnicodeDecodeError` on Windows.
-
-## License
-
-MIT
 
 ## Credits
 - Requires [Steamodded](https://github.com/Steamopollys/Steamodded) mod loader
