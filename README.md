@@ -77,16 +77,12 @@ pip install mcp
 ```json
 {
   "mcpServers": {
-    "balatro": {
-      "command": "python",
+    "balatro-agent": {
+      "type": "stdio",
+      "command": "C:\\Users\\YOUR_USERNAME\\Path\\To\\.venv/Scripts/python.exe",
       "args": [
-        "-u",
         "C:\\Users\\YOUR_USERNAME\\Path\\To\\Balatro-MCP-Server\\balatro_mcp_server.py"
-      ],
-      "env": {
-        "PYTHONIOENCODING": "utf-8",
-        "PYTHONUNBUFFERED": "1"
-      }
+      ]
     }
   }
 }
